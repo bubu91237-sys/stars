@@ -20,20 +20,25 @@
         }
         canvas {
             display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
             width: 100vw;
             height: 100vh;
+            z-index: 0;
         }
         .ui-panel {
             position: absolute;
             top: 20px;
             left: 20px;
-            background: rgba(15, 23, 42, 0.75);
+            background: rgba(15, 23, 42, 0.85);
             backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 20px;
+            padding: 16px;
             border-radius: 16px;
             box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
             max-width: 320px;
+            width: calc(100vw - 40px);
             z-index: 10;
             pointer-events: auto;
         }
@@ -48,11 +53,11 @@
         p {
             font-size: 0.8rem;
             color: #9ca3af;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
             line-height: 1.4;
         }
         .control-group {
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
         label {
             display: flex;
@@ -69,7 +74,7 @@
         .btn-row {
             display: flex;
             gap: 8px;
-            margin-top: 16px;
+            margin-top: 12px;
         }
         button {
             flex: 1;
@@ -90,7 +95,7 @@
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(15, 23, 42, 0.6);
+            background: rgba(15, 23, 42, 0.7);
             backdrop-filter: blur(8px);
             padding: 8px 16px;
             border-radius: 20px;
@@ -98,6 +103,9 @@
             color: #9ca3af;
             border: 1px solid rgba(255, 255, 255, 0.05);
             pointer-events: none;
+            width: 90%;
+            text-align: center;
+            z-index: 10;
         }
     </style>
 </head>
@@ -123,7 +131,7 @@
         </div>
     </div>
 
-    <div class="tips">提示：按住鼠标左键或用手指拖拽可旋转 3D 视角</div>
+    <div class="tips">提示：在屏幕上滑动可旋转 3D 视角</div>
 
     <canvas id="spaceCanvas"></canvas>
 
@@ -133,8 +141,8 @@
 
         let width, height;
         function resize() {
-            width = canvas.width = window.innerWidth;
-            height = canvas.height = window.innerHeight;
+            width = canvas.width = window.innerWidth || document.documentElement.clientWidth;
+            height = canvas.height = window.innerHeight || document.documentElement.clientHeight;
         }
         window.addEventListener('resize', resize);
         resize();
@@ -204,3 +212,128 @@
             const scale = fov / (fov + z2 + 400);
             return {
                 x: width / 2 + x1 * scale,
+                y: height / 2 + y2 * scale,
+                scale: scale,
+                z: z2
+            };
+        }
+
+        function animate() {
+            ctx.fillStyle = 'rgba(3, 7, 18, 0.3)';
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.fillStyle = '#ffffff';
+            stars.forEach(s => {
+                let p = project(s.x, s.y, s.z);
+                if (p.scale > 0) {
+                    ctx.globalAlpha = Math.min(1, p.scale * 0.8);
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, s.size * p.scale, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+            ctx.globalAlpha = 1.0;
+
+            if (!isPaused) {
+                angle += 0.015 * speed;
+            }
+
+            const dist = 160; 
+            const r1 = dist * 0.4;
+            const r2 = dist * 0.6;
+
+            const x1 = Math.cos(angle) * r1;
+            const z1 = Math.sin(angle) * r1;
+            const y1 = Math.sin(angle * 0.5) * 20;
+
+            const x2 = -Math.cos(angle) * r2;
+            const z2 = -Math.sin(angle) * r2;
+            const y2 = -Math.sin(angle * 0.5) * 20;
+
+            trail1.unshift(project(x1, y1, z1));
+            trail2.unshift(project(x2, y2, z2));
+
+            const maxLen = parseInt(document.getElementById('trailRange').value);
+            if (trail1.length > maxLen) trail1.pop();
+            if (trail2.length > maxLen) trail2.pop();
+
+            if (trail1.length > 1) {
+                ctx.beginPath();
+                ctx.moveTo(trail1[0].x, trail1[0].y);
+                for (let i = 1; i < trail1.length; i++) {
+                    ctx.lineTo(trail1[i].x, trail1[i].y);
+                }
+                ctx.strokeStyle = 'rgba(251, 191, 36, 0.3)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            if (trail2.length > 1) {
+                ctx.beginPath();
+                ctx.moveTo(trail2[0].x, trail2[0].y);
+                for (let i = 1; i < trail2.length; i++) {
+                    ctx.lineTo(trail2[i].x, trail2[i].y);
+                }
+                ctx.strokeStyle = 'rgba(56, 189, 248, 0.3)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            let p1 = project(x1, y1, z1);
+            let p2 = project(x2, y2, z2);
+
+            const starsToDraw = [
+                { p: p1, color: '#fbbf24', glow: 'rgba(251, 191, 36, 0.6)', radius: 18 },
+                { p: p2, color: '#38bdf8', glow: 'rgba(56, 189, 248, 0.6)', radius: 14 }
+            ].sort((a, b) => a.p.z - b.p.z);
+
+            starsToDraw.forEach(star => {
+                let r = star.radius * star.p.scale;
+                if (r < 1) r = 1;
+
+                let gradient = ctx.createRadialGradient(star.p.x, star.p.y, 0, star.p.x, star.p.y, r * 3.5);
+                gradient.addColorStop(0, star.glow);
+                gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(star.p.x, star.p.y, r * 3.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = star.color;
+                ctx.beginPath();
+                ctx.arc(star.p.x, star.p.y, r, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+
+        const speedRange = document.getElementById('speedRange');
+        const speedVal = document.getElementById('speedVal');
+        speedRange.addEventListener('input', e => {
+            speed = parseFloat(e.target.value);
+            speedVal.innerText = speed.toFixed(1) + 'x';
+        });
+
+        const trailRange = document.getElementById('trailRange');
+        const trailVal = document.getElementById('trailVal');
+        trailRange.addEventListener('input', e => {
+            const val = parseInt(e.target.value);
+            trailVal.innerText = val < 100 ? '较短' : val > 300 ? '较长' : '中等';
+        });
+
+        const pauseBtn = document.getElementById('pauseBtn');
+        pauseBtn.addEventListener('click', () => {
+            isPaused = !isPaused;
+        });
+
+        const resetBtn = document.getElementById('resetBtn');
+        resetBtn.addEventListener('click', () => {
+            rotX = 0.4;
+            rotY = 0.0;
+        });
+    </script>
+</body>
+</html>
