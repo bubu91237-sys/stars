@@ -123,7 +123,7 @@
         </div>
     </div>
 
-    <div class="tips">提示：按住鼠标左键拖拽可旋转 3D 视角，滚动鼠标滚轮可缩放</div>
+    <div class="tips">提示：按住鼠标左键或用手指拖拽可旋转 3D 视角</div>
 
     <canvas id="spaceCanvas"></canvas>
 
@@ -139,7 +139,6 @@
         window.addEventListener('resize', resize);
         resize();
 
-        // 背景微光粒子
         const stars = Array.from({ length: 300 }, () => ({
             x: (Math.random() - 0.5) * window.innerWidth * 2,
             y: (Math.random() - 0.5) * window.innerHeight * 2,
@@ -147,13 +146,10 @@
             size: Math.random() * 1.5
         }));
 
-        // 交互控制变量
         let angle = 0;
         let speed = 1.0;
-        let trailLength = 200;
         let isPaused = false;
 
-        // 3D 视角旋转
         let rotX = 0.4;
         let rotY = 0.0;
         let isDragging = false;
@@ -177,7 +173,6 @@
 
         window.addEventListener('mouseup', () => isDragging = false);
 
-        // 触控支持
         window.addEventListener('touchstart', e => {
             if(e.touches.length === 1) {
                 isDragging = true;
@@ -196,16 +191,12 @@
         });
         window.addEventListener('touchend', () => isDragging = false);
 
-        // 轨迹记录
         let trail1 = [];
         let trail2 = [];
 
         function project(x, y, z) {
-            // 简单的 3D 旋转与透视投影
-            // 绕 Y 轴旋转
             let x1 = x * Math.cos(rotY) - z * Math.sin(rotY);
             let z1 = x * Math.sin(rotY) + z * Math.cos(rotY);
-            // 绕 X 轴旋转
             let y2 = y * Math.cos(rotX) - z1 * Math.sin(rotX);
             let z2 = y * Math.sin(rotX) + z1 * Math.cos(rotX);
 
@@ -213,142 +204,3 @@
             const scale = fov / (fov + z2 + 400);
             return {
                 x: width / 2 + x1 * scale,
-                y: height / 2 + y2 * scale,
-                scale: scale,
-                z: z2
-            };
-        }
-
-        function animate() {
-            // 半透明清屏形成拖尾残影背景
-            ctx.fillStyle = 'rgba(3, 7, 18, 0.3)';
-            ctx.fillRect(0, 0, width, height);
-
-            // 绘制背景星空
-            ctx.fillStyle = '#ffffff';
-            stars.forEach(s => {
-                let p = project(s.x, s.y, s.z);
-                if (p.scale > 0) {
-                    ctx.globalAlpha = Math.min(1, p.scale * 0.8);
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, s.size * p.scale, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            });
-            ctx.globalAlpha = 1.0;
-
-            if (!isPaused) {
-                angle += 0.015 * speed;
-            }
-
-            // 双星轨道计算（围绕质心）
-            const dist = 160; 
-            const r1 = dist * 0.4;
-            const r2 = dist * 0.6;
-
-            const x1 = Math.cos(angle) * r1;
-            const z1 = Math.sin(angle) * r1;
-            const y1 = Math.sin(angle * 0.5) * 20;
-
-            const x2 = -Math.cos(angle) * r2;
-            const z2 = -Math.sin(angle) * r2;
-            const y2 = -Math.sin(angle * 0.5) * 20;
-
-            // 记录轨迹
-            trail1.unshift(project(x1, y1, z1));
-            trail2.unshift(project(x2, y2, z2));
-            if (trail1.length > trail50) { // 限制长度
-                // 动态控制
-            }
-            const maxLen = parseInt(document.getElementById('trailRange').value);
-            if (trail1.length > maxLen) trail1.pop();
-            if (trail2.length > maxLen) trail2.pop();
-
-            // 绘制主星1轨迹 (金橙色)
-            if (trail1.length > 1) {
-                ctx.beginPath();
-                ctx.moveTo(trail1[0].x, trail1[0].y);
-                for (let i = 1; i < trail1.length; i++) {
-                    ctx.lineTo(trail1[i].x, trail1[i].y);
-                }
-                ctx.strokeStyle = 'rgba(251, 191, 36, 0.3)';
-                ctx.lineWidth = 2;
-                ctx.stroke();
-            }
-
-            // 绘制伴星2轨迹 (青蓝色)
-            if (trail2.length > 1) {
-                ctx.beginPath();
-                ctx.moveTo(trail2[0].x, trail2[0].y);
-                for (let i = 1; i < trail2.length; i++) {
-                    ctx.lineTo(trail2[i].x, trail2[i].y);
-                }
-                ctx.strokeStyle = 'rgba(56, 189, 248, 0.3)';
-                ctx.lineWidth = 2;
-                ctx.stroke();
-            }
-
-            // 计算投影坐标
-            let p1 = project(x1, y1, z1);
-            let p2 = project(x2, y2, z2);
-
-            // 按 Z 深度排序保证前后遮挡关系正确
-            const starsToDraw = [
-                { p: p1, color: '#fbbf24', glow: 'rgba(251, 191, 36, 0.6)', radius: 18 },
-                { p: p2, color: '#38bdf8', glow: 'rgba(56, 189, 248, 0.6)', radius: 14 }
-            ].sort((a, b) => a.p.z - b.p.z);
-
-            // 绘制恒星
-            starsToDraw.forEach(star => {
-                let r = star.radius * star.p.scale;
-                if (r < 1) r = 1;
-
-                // 恒星光晕
-                let gradient = ctx.createRadialGradient(star.p.x, star.p.y, 0, star.p.x, star.p.y, r * 3.5);
-                gradient.addColorStop(0, star.glow);
-                gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-                ctx.fillStyle = gradient;
-                ctx.beginPath();
-                ctx.arc(star.p.x, star.p.y, r * 3.5, 0, Math.PI * 2);
-                ctx.fill();
-
-                // 恒星本体
-                ctx.fillStyle = star.color;
-                ctx.beginPath();
-                ctx.arc(star.p.x, star.p.y, r, 0, Math.PI * 2);
-                ctx.fill();
-            });
-
-            requestAnimationFrame(animate);
-        }
-
-        animate();
-
-        // UI 绑定
-        const speedRange = document.getElementById('speedRange');
-        const speedVal = document.getElementById('speedVal');
-        speedRange.addEventListener('input', e => {
-            speed = parseFloat(e.target.value);
-            speedVal.innerText = speed.toFixed(1) + 'x';
-        });
-
-        const trailRange = document.getElementById('trailRange');
-        const trailVal = document.getElementById('trailVal');
-        trailRange.addEventListener('input', e => {
-            const val = parseInt(e.target.value);
-            trailVal.innerText = val < 100 ? '较短' : val > 300 ? '较长' : '中等';
-        });
-
-        const pauseBtn = document.getElementById('pauseBtn');
-        pauseBtn.addEventListener('click', () => {
-            isPaused = !isPaused;
-        });
-
-        const resetBtn = document.getElementById('resetBtn');
-        resetBtn.addEventListener('click', () => {
-            rotX = 0.4;
-            rotY = 0.0;
-        });
-    </script>
-</body>
-</html>
